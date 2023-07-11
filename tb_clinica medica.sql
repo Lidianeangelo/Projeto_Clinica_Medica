@@ -137,12 +137,62 @@ select * from pedido_exame;
 
 use clinica;
 
--- delete from pedido_exame;
+delete from pedido_exame;
 
 -- reinicia campo numero_pedido --> próximo 2200
--- DBCC CHECKIDENT('pedido_exame', RESEED, 2199)
+DBCC CHECKIDENT('pedido_exame', RESEED, 2199)
+
+ALTER trigger [dbo].[Atualiza_Pedido_Exame]
+on [dbo].[pedido_exame]
+after insert
+as
+begin
+-- procedimentos dentro da trigger
+SET NOCOUNT ON
+declare @num_ped as integer;
+select @num_ped = numero_pedido from inserted;
+declare @num_cons as integer;
+select @num_cons = fk_consulta_numero_consulta from inserted;
+declare @cod_ex as integer;
+select @cod_ex = fk_exame_codigo from inserted;
+declare @prc as money;
+
+select @prc = preco from exame where codigo = @cod_ex;
+declare @cpf_pac as varchar(20);
+select @cpf_pac = fk_paciente_cpf from consulta where numero_consulta = @num_cons;
+declare @tp_plan as varchar(20);
+select @tp_plan = tipo_plano from paciente where cpf = @cpf_pac;
+
+if @tp_plan = 'Especial'
+begin
+update pedido_exame set valor_pagar = @prc - @prc * 100 / 100 where
+numero_pedido = @num_ped;
+end
+if @tp_plan = 'Padrão'
+begin
+update pedido_exame set valor_pagar = @prc - @prc * 30 / 100 where
+numero_pedido = @num_ped;
+end
+if @tp_plan = 'Básico'
+begin
+update pedido_exame set valor_pagar = @prc - @prc * 10 / 100 where
+numero_pedido = @num_ped;
+end
+print 'Trigger (Atualiza Pedido de Exame) Encerrada';
+end
+
+insert into pedido_exame values('Normal','2022/12/15',0.00,22000,10040);
+insert into pedido_exame values('','2022/12/19',0.00,22000,10100);
+insert into pedido_exame values('','2022/12/16',0.00,22001,10080);
+insert into pedido_exame values('Normal','2022/12/15',0.00,22002,10050);
+insert into pedido_exame values('Inconsistente','2022/12/16',0.00,22003,10080);
+insert into pedido_exame values('','2022/12/17',0.00,22004,10060);
+insert into pedido_exame values('Normal','2022/12/21',0.00,22007,10020);
+insert into pedido_exame values('','2022/12/22',0.00,22008,10030);
+insert into pedido_exame values('','2022/12/22',0.00,22008,10050);
 
 
+select * from pedido_exame;
 
 -- Alteração de dados de tabelas -----------------------------------
 select * from paciente;
@@ -166,3 +216,15 @@ select * from paciente;
 select * from medico;
 delete from medico where crm = 708090;
 select * from medico;
+
+create procedure Agenda_Medicos
+as
+begin
+select m.nome_medico, m.especialidade, m.crm, c.numero_consulta, 
+c.data_consulta, c.horario_consulta, p.nome_paciente, p.cpf, 
+p.nome_plano, p.tipo_plano from medico as m inner join consulta as c 
+on m.crm = c.fk_medico_crm inner join paciente as p on
+c.fk_paciente_cpf = p.cpf
+order by m.nome_medico, c.data_consulta;
+end
+execute Agenda_Medicos;
